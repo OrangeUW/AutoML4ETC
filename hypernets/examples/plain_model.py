@@ -1,0 +1,387 @@
+#
+import copy
+import pickle
+from functools import partial
+
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.neural_network import MLPClassifier
+from sklearn.tree import DecisionTreeClassifier
+
+from hypernets.core import set_random_state, get_random_state
+from hypernets.core.callbacks import SummaryCallback
+from hypernets.core.ops import ModuleChoice, HyperInput, ModuleSpace
+from hypernets.core.search_space import HyperSpace, Choice, Int, Real, Cascade, Constant, HyperNode
+from hypernets.model import Estimator, HyperModel
+from hypernets.searchers import make_searcher
+from hypernets.tabular.dask_ex import fix_binary_predict_proba_result
+from hypernets.tabular.metrics import calc_score
+from hypernets.utils import fs, logging, const, infer_task_type
+
+logger = logging.get_logger(__name__)
+
+
+class PlainSearchSpace(object):
+    def __init__(self, enable_dt=True, enable_lr=True, enable_nn=True):
+        assert enable_dt or enable_lr or enable_nn
+
+        super(PlainSearchSpace, self).__init__()
+
+        self.enable_dt = enable_dt
+        self.enable_lr = enable_lr
+        self.enable_nn = enable_nn
+
+    # DecisionTreeClassifier
+    @property
+    def dt(self):
+        return dict(
+            cls=DecisionTreeClassifier,
+            criterion=Choice(["gini", "entropy"]),
+            splitter=Choice(["best", "random"]),
+            max_depth=Choice([None, 3, 5, 10, 20, 50]),
+            random_state=get_random_state(),
+        )
+
+    # NN
+    @property
+    def nn(self):
+        solver = Choice(['lbfgs', 'sgd', 'adam'])
+        return dict(
+            cls=MLPClassifier,
+            max_iter=Int(500, 5000, step=500),
+            activation=Choice(['identity', 'logistic', 'tanh', 'relu']),
+            solver=solver,
+            learning_rate=Choice(['constant', 'invscaling', 'adaptive']),
+            learning_rate_init_stub=Cascade(partial(self._cascade, self._nn_learning_rate_init, 'slvr'), slvr=solver),
+            random_state=get_random_state(),
+        )
+
+    @staticmethod
+    def _nn_learning_rate_init(slvr):
+        if slvr in ['sgd' or 'adam']:
+            return 'learning_rate_init', Choice([0.001, 0.01])
+        else:
+            return 'learning_rate_init', Constant(0.001)
+
+    # LogisticRegression
+    @property
+    def lr(self):
+        iters = [1000]
+        while iters[-1] < 9000:
+            iters.append(int(round(iters[-1] * 1.25, -2)))
+
+        solver = Choice(['newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga'])
+        penalty = Cascade(partial(self._cascade, self._lr_penalty_fn, 'slvr'), slvr=solver)
+        l1_ratio = Cascade(partial(self._cascade, self._lr_l1_ratio, 'penalty'), penalty=penalty)
+
+        return dict(
+            cls=LogisticRegression,
+            max_iter=Choice(iters),
+            solver=solver,
+            penalty_stub=penalty,
+            l1_ratio_stub=l1_ratio,
+            random_state=get_random_state(),
+        )
+
+    @staticmethod
+    def _lr_penalty_fn(slvr):
+        if slvr == 'saga':
+            return 'penalty', Choice(['l2', 'elasticnet', 'l1', 'none'])
+        else:
+            return 'penalty', Constant('l2')
+
+    @staticmethod
+    def _lr_l1_ratio(penalty):
+        if penalty in ['elasticnet', ]:
+            return 'l1_ratio', Real(0.0, 1.0, step=0.1)
+        else:
+            return 'l1_ratio', Constant(None)
+
+    # commons
+    @staticmethod
+    def _cascade(fn, key, args, space):
+        with space.as_default():
+            kvalue = args[key]
+            if isinstance(kvalue, HyperNode):
+                kvalue = kvalue.value
+            return fn(kvalue)
+
+    # HyperSpace
+    def __call__(self, *args, **kwargs):
+        space = HyperSpace()
+
+        with space.as_default():
+            hyper_input = HyperInput(name='input1')
+
+            estimators = []
+            if self.enable_dt:
+                estimators.append(self.dt)
+            if self.enable_lr:
+                estimators.append(self.lr)
+            if self.enable_nn:
+                estimators.append(self.nn)
+
+            modules = [ModuleSpace(name=f'{e["cls"].__name__}', **e) for e in estimators]
+            outputs = ModuleChoice(modules)(hyper_input)
+            space.set_inputs(hyper_input)
+
+        return space
+
+
+class PlainEstimator(Estimator):
+    def __init__(self, space_sample, task=const.TASK_BINARY, transformer=None):
+        assert task in {const.TASK_BINARY, const.TASK_MULTICLASS, const.TASK_REGRESSION}
+
+        super(PlainEstimator, self).__init__(space_sample, task)
+
+        # space, _ = space_sample.compile_and_forward()
+        out = space_sample.get_outputs()[0]
+        kwargs = out.param_values
+        kwargs = {k: v for k, v in kwargs.items() if not isinstance(v, HyperNode)}
+
+        cls = kwargs.pop('cls')
+        logger.info(f'create estimator {cls.__name__}: {kwargs}')
+        self.model = cls(**kwargs)
+        self.cls = cls
+        self.model_args = kwargs
+        self.transformer = transformer
+
+        # fitted
+        self.classes_ = None
+        self.cv_models_ = []
+
+    def summary(self):
+        pass
+
+    def fit(self, X, y, **kwargs):
+        eval_set = kwargs.pop('eval_set', None)  # ignore
+
+        if self.transformer is not None:
+            X = self.transformer.fit_transform(X, y)
+
+        self.model.fit(X, y, **kwargs)
+        self.classes_ = getattr(self.model, 'classes_', None)
+        self.cv_models_ = []
+
+        return self
+
+    def fit_cross_validation(self, X, y, stratified=True, num_folds=3, shuffle=False, random_state=9527, metrics=None,
+                             **kwargs):
+        assert num_folds > 0
+        assert isinstance(metrics, (list, tuple))
+
+        eval_set = kwargs.pop('eval_set', None)  # ignore
+
+        if self.transformer is not None:
+            X = self.transformer.fit_transform(X, y)
+
+        if stratified and self.task == const.TASK_BINARY:
+            iterators = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=random_state)
+        else:
+            iterators = KFold(n_splits=num_folds, shuffle=True, random_state=random_state)
+
+        if isinstance(y, (pd.Series, pd.DataFrame)):
+            y = y.values
+
+        oof_ = None
+        oof_scores = []
+        cv_models = []
+        for n_fold, (train_idx, valid_idx) in enumerate(iterators.split(X, y)):
+            x_train_fold, y_train_fold = X.iloc[train_idx], y[train_idx]
+            x_val_fold, y_val_fold = X.iloc[valid_idx], y[valid_idx]
+
+            fold_model = copy.deepcopy(self.model)
+            fold_model.fit(x_train_fold, y_train_fold, **kwargs)
+
+            # calc fold oof and score
+            if self.task == const.TASK_REGRESSION:
+                proba = fold_model.predict(x_val_fold)
+                preds = proba
+            else:
+                proba = fold_model.predict_proba(x_val_fold)
+                if self.task == const.TASK_BINARY:
+                    proba = fix_binary_predict_proba_result(proba)
+
+                proba_threshold = 0.5
+                if proba.shape[-1] > 2:  # multiclass
+                    preds = proba.argmax(axis=-1)
+                else:  # binary:
+                    preds = (proba[:, 1] > proba_threshold).astype('int32')
+                preds = np.array(fold_model.classes_).take(preds, axis=0)
+
+            if oof_ is None:
+                if len(proba.shape) == 1:
+                    oof_ = np.full(y.shape, np.nan, proba.dtype)
+                else:
+                    oof_ = np.full((y.shape[0], proba.shape[-1]), np.nan, proba.dtype)
+            fold_scores = calc_score(y_val_fold, preds, proba, metrics, task=self.task)
+
+            # save fold result
+            oof_[valid_idx] = proba
+            oof_scores.append(fold_scores)
+            cv_models.append(fold_model)
+
+        self.classes_ = getattr(cv_models[0], 'classes_', None)
+        self.cv_models_ = cv_models
+
+        # calc final score with mean
+        scores = pd.concat([pd.Series(s) for s in oof_scores], axis=1).mean(axis=1).to_dict()
+        logger.info(f'fit_cross_validation score:{scores}, folds score:{oof_scores}')
+
+        # return
+        return scores, oof_, oof_scores
+
+    def predict(self, X, **kwargs):
+        eval_set = kwargs.pop('eval_set', None)  # ignore
+
+        if self.transformer is not None:
+            X = self.transformer.transform(X)
+
+        if self.cv_models_:
+            if self.task == const.TASK_REGRESSION:
+                pred_sum = None
+                for est in self.cv_models_:
+                    pred = est.predict(X, **kwargs)
+                    if pred_sum is None:
+                        pred_sum = pred
+                    else:
+                        pred_sum += pred
+                preds = pred_sum / len(self.cv_models_)
+            else:
+                proba = self.predict_proba(X, **kwargs)
+                preds = self.proba2predict(proba)
+                preds = np.array(self.classes_).take(preds, axis=0)
+        else:
+            preds = self.model.predict(X, **kwargs)
+
+        return preds
+
+    def predict_proba(self, X, **kwargs):
+        eval_set = kwargs.pop('eval_set', None)  # ignore
+
+        if self.transformer is not None:
+            X = self.transformer.transform(X)
+
+        if self.cv_models_:
+            proba_sum = None
+            for est in self.cv_models_:
+                proba = est.predict_proba(X, **kwargs)
+                if self.task == const.TASK_BINARY:
+                    proba = fix_binary_predict_proba_result(proba)
+                if proba_sum is None:
+                    proba_sum = proba
+                else:
+                    proba_sum += proba
+            proba = proba_sum / len(self.cv_models_)
+        else:
+            proba = self.model.predict_proba(X, **kwargs)
+            if self.task == const.TASK_BINARY:
+                proba = fix_binary_predict_proba_result(proba)
+
+        return proba
+
+    def evaluate(self, X, y, metrics=None, **kwargs):
+        if metrics is None:
+            metrics = ['rmse'] if self.task == const.TASK_REGRESSION else ['accuracy']
+
+        if self.task == const.TASK_REGRESSION:
+            proba = None
+            preds = self.predict(X, **kwargs)
+        else:
+            proba = self.predict_proba(X, **kwargs)
+            preds = self.proba2predict(proba, proba_threshold=kwargs.get('proba_threshold', 0.5))
+
+        scores = calc_score(y, preds, proba, metrics, self.task)
+        return scores
+
+    def proba2predict(self, proba, proba_threshold=0.5):
+        if self.task == const.TASK_REGRESSION:
+            return proba
+        if proba.shape[-1] > 2:
+            predict = proba.argmax(axis=-1)
+        elif proba.shape[-1] == 2:
+            predict = (proba[:, 1] > proba_threshold).astype('int32')
+        else:
+            predict = (proba > proba_threshold).astype('int32')
+        return predict
+
+    def save(self, model_file):
+        with fs.open(model_file, 'wb') as f:
+            pickle.dump(self, f, protocol=4)
+
+    @staticmethod
+    def load(model_file):
+        with fs.open(model_file, 'rb') as f:
+            return pickle.load(f)
+
+    def get_iteration_scores(self):
+        return []
+
+
+class PlainModel(HyperModel):
+    def __init__(self, searcher, dispatcher=None, callbacks=None, reward_metric=None, task=None,
+                 discriminator=None, transformer=None):
+        super(PlainModel, self).__init__(searcher, dispatcher=dispatcher, callbacks=callbacks,
+                                         reward_metric=reward_metric, task=task)
+        self.transformer = transformer
+
+    def _get_estimator(self, space_sample):
+        if callable(self.transformer):
+            transformer = self.transformer()
+        else:
+            transformer = self.transformer
+
+        return PlainEstimator(space_sample, task=self.task, transformer=transformer)
+
+    def load_estimator(self, model_file):
+        return PlainEstimator.load(model_file)
+
+
+def train(X_train, y_train, X_eval, y_eval, task=None, reward_metric=None, optimize_direction='max', **kwargs):
+    if task is None:
+        task, _ = infer_task_type(y_train)
+    if reward_metric is None:
+        reward_metric = 'rmse' if task == const.TASK_REGRESSION else 'accuracy'
+
+    search_space = PlainSearchSpace()
+    searcher = make_searcher('mcts', search_space, optimize_direction=optimize_direction)
+    callbacks = [SummaryCallback()]
+    hm = PlainModel(searcher=searcher, task=task, reward_metric=reward_metric, callbacks=callbacks)
+    hm.search(X_train, y_train, X_eval, y_eval, **kwargs)
+    best = hm.get_best_trial()
+    model = hm.final_train(best.space_sample, X_train, y_train)
+    return hm, model
+
+
+def train_heart_disease(**kwargs):
+    from hypernets.tabular.datasets import dsutils
+    from sklearn.model_selection import train_test_split
+
+    X = dsutils.load_heart_disease_uci()
+    y = X.pop('target')
+
+    X_train, X_test, y_train, y_test = \
+        train_test_split(X, y, test_size=0.3, random_state=get_random_state())
+    X_train, X_eval, y_train, y_eval = \
+        train_test_split(X_train, y_train, test_size=0.3, random_state=get_random_state())
+
+    kwargs = {'reward_metric': 'auc', 'max_trials': 10, **kwargs}
+    hm, model = train(X_train, y_train, X_eval, y_eval, const.TASK_BINARY, **kwargs)
+
+    print('-' * 50)
+    scores = model.evaluate(X_test, y_test, metrics=['auc', 'accuracy', 'f1', 'recall', 'precision'])
+    print('scores:', scores)
+
+    trials = hm.get_top_trials(10)
+    models = [hm.load_estimator(t.model_file) for t in trials]
+
+    msgs = [f'{t.trial_no},{t.reward},{m.cls.__name__} {m.model_args}' for t, m in zip(trials, models)]
+    print('top trials:')
+    print('\n'.join(msgs))
+
+
+if __name__ == '__main__':
+    set_random_state(335)
+    train_heart_disease()
