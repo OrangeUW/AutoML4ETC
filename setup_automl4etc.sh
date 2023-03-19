@@ -1,5 +1,5 @@
 #!/bin/bash
-
+eval "$(conda shell.bash hook)"
 conda create --prefix ./venv python=3.8
 conda activate ./venv
 mv hypernets ./venv/lib/python3.8/site-packages/
