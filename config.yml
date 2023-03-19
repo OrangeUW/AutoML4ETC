@@ -1,0 +1,16 @@
+---
+searchspace.arch: 'NR'  # this could be 'NRNR' or 'NRNRNR', more 'N'ormal cells or 'R'eduction cells is not recommended
+searchspace.init_filters: 64 # number of initial filters to begin process
+searchspace.node_num: 4 # number of nodes per cell
+searchspace.classification_dropout: 0 # final dropout rate before softmax layer
+
+search.searchalgo: 'RS' # search algorithm -> 'RL', 'RS', 'MCTS'
+search.loss: 'sparse_categorical_crossentropy' # kind of loss for the model evaluation, supported: https://keras.io/api/losses/
+search.metrics: ['sparse_categorical_accuracy'] # array of metrics to monitor, supported: https://keras.io/api/metrics/
+search.optimizer: 'adam' # optimizer to use, supported: https://keras.io/api/optimizers/
+search.optimize_direction: 'max' #'max' or 'min' -> for the search.metric chosen
+search.initial_learning_rate: 0.001 # initial learning rate
+search.learning_rate_decline_cut: 0.5 # how much to cut (ie. decline) the learning rate every 10 (default) epochs
+search.learning_rate_decline_every_epoch: 2 # wether cut in half every 10 (default) epochs or not
+search.max_trials: 5 # maximum trials for searching time
+search.training_epoch_per_trial: 2 # maximum epochs for training the child model per trial

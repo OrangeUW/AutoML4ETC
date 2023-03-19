@@ -1,19 +1,4 @@
-import sklearn.metrics as SM
-import seaborn
-from scipy.io import loadmat
-from expiringdict import ExpiringDict
-import re
-import random
-import pickle
-import importlib
 from pathlib import Path
-import tensorflow.keras.models as KM
-import tensorflow.keras.layers as KL
-import tensorflow.keras.utils as KU
-import tensorflow.keras.regularizers as KR
-import tensorflow.keras.optimizers as KO
-import tensorflow.keras.backend as KB
-import tensorflow.keras.callbacks 
 from hypernets.searchers.random_searcher import RandomSearcher
 from hyperkeras.searchers.enas_rl_searcher import EnasSearcher
 from hypernets.searchers.mcts_searcher import MCTSSearcher
@@ -21,20 +6,48 @@ from hyperkeras.search_space.enas_common_ops_dropoutCNN_05_1DCNN import *
 from hyperkeras.layers_1DCNN_OPS import Input, Reshape
 from hyperkeras.search_space.enas_layers_1D import FactorizedReduction
 from hypernets.core.search_space import HyperSpace
-import tensorflow as tf
-import numpy as np
 from hypernets.core.callbacks import SummaryCallback
 from hypernets.core.ops import *
 from hyperkeras.hyper_keras import HyperKeras
 from hypernets.searchers.random_searcher import RandomSearcher
 from hyperkeras.searchers.enas_rl_searcher import EnasSearcher
 from hypernets.searchers.mcts_searcher import MCTSSearcher
-import time
-import numpy as N
-import numpy.linalg as NL
-import numpy.random as NR
-import pandas as P
-import matplotlib.pyplot as plt
+import re
+import tensorflow as tf
+import yaml
+import numpy as np
+
+_CONF = None
+
+
+def _get_conf_dict():
+    global _CONF
+
+    if _CONF:
+        return dict(_CONF)
+
+    with open(Path(__file__).resolve().parent / "config.yml") as f:
+        _CONF = yaml.safe_load(f)
+        return dict(_CONF)
+
+def get_conf(key, default=None):
+    return _get_conf_dict().get(key, default) if default is not None else _get_conf_dict()[key]
+
+arch = get_conf("searchspace.arch", "NR")
+init_filters=get_conf("searchspace.init_filters", 64)
+node_num=get_conf("searchspace.node_num", 4)
+optimize_direction= get_conf("search.optimize_direction", "max")
+optimizer = get_conf("search.optimizer", "adam")
+loss = get_conf("search.loss", "sparse_categorical_crossentropy")
+metrics = get_conf("search.metrics", ['sparse_categorical_accuracy'])
+searcher = get_conf("search.searchalgo", "RS")
+initial_lr=get_conf("search.initial_learning_rate", 0.001)
+lr_exp_rate=get_conf("search.learning_rate_decline_cut", 0.5)
+lr_exp_epoch=get_conf("search.learning_rate_decline_every_epoch", 10)
+max_trials=get_conf("search.max_trials", 100)
+epochs=get_conf("search.training_epoch_per_trial", 40)
+
+
 
 
 def automl4etc_cnn_searchspace(input_shape, classes, arch='NR', init_filters=64, node_num=4, data_format=None,
@@ -88,24 +101,30 @@ def automl4etc_cnn_searchspace(input_shape, classes, arch='NR', init_filters=64,
     
 
 class automl4etc():
-    
-    def __init__(self):
-        self.searcher = RandomSearcher
-    
-    def set_searcher(self, searcher="RS"):
-        if searcher == "RL":
-            self.searcher = EnasSearcher
-        elif searcher == "RS":
-            self.searcher = RandomSearcher
-        elif searcher == "MCTS":
-            self.searcher = MCTSSearcher
-        return
-    
+        
     def search(self, train_dataset, test_dataset, input_shape, classes):
-        searcher_space = self.searcher(
-            lambda: automl4etc_cnn_searchspace(arch='NR', input_shape=(3, 600), classes=9),
-            optimize_direction='max')
-        hk = HyperKeras(searcher_space, optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['sparse_categorical_accuracy'],
+        global arch, init_filters, node_num, optimize_direction
+        global optimizer, loss, metrics, searcher, initial_lr
+        global lr_exp_rate, lr_exp_epoch, max_trials, epochs
+        
+        searcher = "RS"
+        if searcher == "RL":
+            searcher = EnasSearcher
+        elif searcher == "RS":
+            searcher = RandomSearcher
+        elif searcher == "MCTS":
+            searcher = MCTSSearcher
+        else:
+            print("***ERROR, invalid searcher: {}*** reverting to RS".format(searcher))
+            searcher = RandomSearcher
+        
+        searcher_space = searcher(
+            lambda: automl4etc_cnn_searchspace(arch=arch, input_shape=input_shape, classes=classes,
+            hp_dict={},                                   
+            init_filters=init_filters,
+            node_num=node_num),
+            optimize_direction= optimize_direction)
+        hk = HyperKeras(searcher_space, optimizer=optimizer, loss=loss, metrics=metrics,
                         callbacks=[SummaryCallback()])
 
         (x_train1, y_train1), (x_test1, y_test1) = tf.keras.datasets.mnist.load_data()
@@ -114,8 +133,15 @@ class automl4etc():
         x_train1, x_test1 = x_train1[..., np.newaxis] / 255.0, x_test1[..., np.newaxis] / 255.0
         y_train1 = tf.keras.utils.to_categorical(y_train1)
         y_test1 = tf.keras.utils.to_categorical(y_test1)
+        
 
-        hk.search(train_dataset, y_train1, test_dataset, y_test1, initial_lr=0.001, max_trials=200, epochs=40)
+
+        hk.search(train_dataset, y_train1, test_dataset, y_test1,
+                  initial_lr=initial_lr,
+                  lr_exp_rate=lr_exp_rate,
+                  lr_exp_epoch=lr_exp_epoch,
+                  max_trials=max_trials, 
+                  epochs=epochs)
         assert hk.get_best_trial()
         
     
@@ -283,7 +309,7 @@ class automl4etc():
             assert( len( class_counts ) == len( app_categories_sorted ) )
             print( sorted( class_counts.items() ) )
             return class_counts
-
+        import tensorflow as tf
         print(get_class_counts( y_train ))
         print(get_class_counts( y_test ))
 
