@@ -17,7 +17,14 @@ import tensorflow as tf
 import yaml
 import numpy as np
 
+import random
+import pickle
+import commonio.datagen_separated
+
 _CONF = None
+
+
+
 
 
 def _get_conf_dict():
@@ -60,7 +67,7 @@ def automl4etc_cnn_searchspace(input_shape, classes, arch='NR', init_filters=64,
             if use_input_placeholder:
                 input = Input(shape=input_shape, name='0_input')
                 input_net = input
-                input_net = Reshape(target_shape=(3 * 600, 1), name="0_input_Flatten")(input_net)
+                input_net = Reshape(target_shape=(input_shape[0]*input_shape[1], 1), name="0_input_Flatten")(input_net)
             else:
                 input = None
                 input_net = input
@@ -144,7 +151,33 @@ class automl4etc():
                   epochs=epochs)
         assert hk.get_best_trial()
         
-    
+    def quic_ucdavis_data_loader(self, path='./quic-dataset'):
+        NAMES = ["GoogleDoc", "GoogleDrive", "GoogleMusic", "GoogleSearch", "Youtube"]
+        def label_func(x):
+            return NAMES.index(x)
+
+        with open(path+"/full.pickle", "rb") as f:
+            samples = pickle.load(f)
+            random.seed(3549)
+            random.shuffle(samples)
+
+        samples = [samples_address.replace('/home/orange/dataset-mat/quic/', path+'/quic-data/') for samples_address in samples]
+
+
+
+        kwargs = {
+            "batchsize":8,
+            'n_flows': 1024,
+            'flow_separate_features': True,
+            'flow_only': True,
+        #     'stft': {'nperseg': 32, 'noverlap': 30, 'mode': 'rainbow'},
+            'path_transform_func': lambda x:x
+        }
+
+        train_gen = commonio.datagen_separated.DataGenSeparated(samples, label_func, idxfilter=lambda x:(x%5!=2), **kwargs)
+        val_gen   = commonio.datagen_separated.DataGenSeparated(samples, label_func, idxfilter=lambda x:(x%5==2), **kwargs)
+
+        return train_gen, val_gen
     def mldit_data_loader(self, path='MLDIT_flow_headers_with_sni.txt'):
         import json
 
