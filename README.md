@@ -85,7 +85,7 @@ search.training_epoch_per_trial: 40 # maximum epochs for training the child mode
 
 ## Note
 
-`This project was made possible with open-source libraries.`
+`This project was made possible with open-source libraries.`\
 <img src="https://upload.wikimedia.org/wikipedia/commons/4/42/Opensource.svg" width="240" alt="uwaterloo"/>
 
 
