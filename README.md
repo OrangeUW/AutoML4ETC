@@ -2,7 +2,6 @@
 AutoML4ETC: Automated Neural Architecture Search for Encrypted Traffic Classification on Orange Mobile Network
 
 Navid Malekghaini*, Elham Akbari Azirani*, Mohammad A. Salahuddin*, Noura Limam*, Raouf Boutaba*
-
 Bertrand Mathieu† , Stephanie Moteau† , and Stephane Tuffin†
 
 *University of Waterloo, Canada, † Orange Labs, France
