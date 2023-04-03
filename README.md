@@ -1,5 +1,11 @@
 # AutoML4ETC
 AutoML4ETC: Automated Neural Architecture Search for Encrypted Traffic Classification on Orange Mobile Network
+Navid Malekghaini*, Elham Akbari Azirani*, Mohammad A. Salahuddin*, Noura Limam*, Raouf Boutaba*
+Bertrand Mathieu† , Stephanie Moteau† , and Stephane Tuffin†
+*University of Waterloo, Canada, † Orange Labs, France
+
+<img alt="orange" src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Orange_logo.svg/766px-Orange_logo.svg.png" width="80" /> <img src="https://dataverse.scholarsportal.info/logos/41143/Waterloo.png" width="240" alt="uwaterloo"/>
+
 
 ## About
 We propose AutoML4ETC, a novel tool to automatically design efficient and high-performing neural architectures for encrypted traffic classification. We define a novel, powerful search space tailored specifically for the near real-time classification of encrypted traffic using packet header bytes. We show that with different search strategies over our search space, AutoML4ETC generates neural architectures that outperform the state-of-the-art encrypted traffic classifiers on several benchmark datasets, including real-world datasets of TLS and QUIC traffic collected from the Orange mobile network. In addition to being more accurate, AutoML4ETC’s architectures are significantly more efficient and lighter in terms of the number of parameters. For the reproducibility of results, we further showcase the superior performance of AutoML4ETC in comparison to state-of-the-art NAS techniques on a publicly available QUIC dataset. Finally, we make AutoML4ETC publicly available.
