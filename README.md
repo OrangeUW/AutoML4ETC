@@ -2,29 +2,7 @@
 AutoML4ETC: Automated Neural Architecture Search for Encrypted Traffic Classification on Orange Mobile Network
 
 ## About
-Deep learning (DL) has been successfully applied to encrypted
-network traffic classification in experimental settings. However,
-in production use, it has been shown that a DL classifier’s per-
-formance inevitably decays over time. Re-training the model on
-newer datasets has been shown to only partially improve its per-
-formance. Manually re-tuning the model architecture to meet the
-performance expectations on newer datasets is time-consuming
-and requires domain expertise. We propose AutoML4ETC, a novel
-tool to automatically design efficient and high-performing neural
-architectures for encrypted traffic classification. We define a novel,
-powerful search space tailored specifically for the near real-time
-classification of encrypted traffic using packet header bytes. We
-show that with different search strategies over our search space,
-AutoML4ETC generates neural architectures that outperform the
-state-of-the-art encrypted traffic classifiers on several benchmark
-datasets, including real-world datasets of TLS and QUIC traffic
-collected from the Orange mobile network. In addition to being
-more accurate, AutoML4ETC’s architectures are significantly more
-efficient and lighter in terms of the number of parameters. For the
-reproducibility of results, we further showcase the superior per-
-formance of AutoML4ETC in comparison to state-of-the-art NAS
-techniques on a publicly available QUIC dataset. Finally, we make
-AutoML4ETC publicly available.
+We propose AutoML4ETC, a novel tool to automatically design efficient and high-performing neural architectures for encrypted traffic classification. We define a novel, powerful search space tailored specifically for the near real-time classification of encrypted traffic using packet header bytes. We show that with different search strategies over our search space, AutoML4ETC generates neural architectures that outperform the state-of-the-art encrypted traffic classifiers on several benchmark datasets, including real-world datasets of TLS and QUIC traffic collected from the Orange mobile network. In addition to being more accurate, AutoML4ETC’s architectures are significantly more efficient and lighter in terms of the number of parameters. For the reproducibility of results, we further showcase the superior performance of AutoML4ETC in comparison to state-of-the-art NAS techniques on a publicly available QUIC dataset. Finally, we make AutoML4ETC publicly available.
 
 ## Installation and use
 
@@ -37,9 +15,11 @@ AutoML4ETC publicly available.
 After installation you can browse to your localhost for accessing the jupyter notebook that can run AutoML4ETC library.
 
 
-## Sample notebook
+## Sample notebook and sample model generated
 
 run sample notebook: test_automl4etc_ucDavisQUIC.ipynb
+
+![(sample model picture should be here)](https://github.com/OrangeUW/AutoML4ETC/blob/main/Discovered_model.png?raw=true)
 
 ## The main API's to use
 ```python
