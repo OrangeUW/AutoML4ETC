@@ -28,7 +28,7 @@ Run sample notebook: test_automl4etc_ucDavisQUIC.ipynb
 
 ![(sample model picture should be here)](https://github.com/OrangeUW/AutoML4ETC/blob/main/Discovered_model.png?raw=true)
 
-## The main API to use
+## The main APIs to use
 ```python
 #Using GPU libraries in the Tensorflow
 import os 
