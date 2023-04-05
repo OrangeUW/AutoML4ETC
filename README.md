@@ -11,6 +11,18 @@ Bertrand Mathieu† , Stephanie Moteau† , and Stephane Tuffin†\
 ## About
 AutoML4ETC is a novel tool to automatically design efficient and high-performing neural architectures for encrypted traffic classification. We define a novel, powerful search space tailored specifically for the near real-time classification of encrypted traffic using packet header bytes. In the paper, we show that with different neural architecture search (NAS) strategies over our search space, AutoML4ETC generates neural architectures that outperform the state-of-the-art encrypted traffic classifiers on several benchmark datasets, including real-world datasets of TLS and QUIC traffic collected from the Orange mobile network. In addition to being more accurate, AutoML4ETC’s architectures are significantly more efficient and lighter in terms of the number of parameters. For reproducibility of results, we further showcase the superior performance of AutoML4ETC in comparison to state-of-the-art NAS techniques on a publicly available QUIC dataset.
 
+## System
+The scripts were tested on Ubuntu 20.04 but should be fine on any debian based system.
+The python scripts should be platform independent and with little effort the installation scripts can be translated to powershell script or other linux/mac shell environments.
+
+## Prerequisite
+1) Install conda from here: https://docs.conda.io/projects/conda/en/latest/user-guide/install/linux.html
+2) Install conda-forge channel from here: https://conda-forge.org/
+```bash
+conda config --add channels conda-forge
+conda config --set channel_priority strict 
+```
+
 ## Installation and use
 
 
