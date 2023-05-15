@@ -99,6 +99,6 @@ search.training_epoch_per_trial: 40 # maximum epochs for training the child mode
 ## Note
 
 `This project was made possible with open-source libraries.`\
-<img src="https://upload.wikimedia.org/wikipedia/commons/4/42/Opensource.svg" width="240" alt="uwaterloo"/>
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Open_Source_Initiative_keyhole.svg/2560px-Open_Source_Initiative_keyhole.svg.png?20160530090515" width="240" alt="uwaterloo"/>
 
 
