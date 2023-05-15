@@ -47,7 +47,7 @@ class KerasEstimator(Estimator):
     def summary(self):
         self.model.summary()
 
-    def fit(self, X, y, validation_gen = None, initial_lr=0.0001, class_weight=None, **kwargs):
+    def fit(self, X, y, validation_gen = None, initial_lr=0.0001, lr_exp_rate=0.5, lr_exp_epoch=10.0, class_weight=None, **kwargs):
         import math
         from tensorflow.keras.callbacks import LearningRateScheduler
 
@@ -59,8 +59,8 @@ class KerasEstimator(Estimator):
 #                 return initial_learning_rate
 #             else:
 #                 return initial_learning_rate * math.exp(-k*epoch)
-            drop_rate = 0.5
-            epochs_drop = 10.0
+            drop_rate = lr_exp_rate
+            epochs_drop = lr_exp_epoch
             return initial_learning_rate * math.pow(drop_rate, math.floor(epoch/epochs_drop))
         
         #self.model.fit(X, y, **kwargs)

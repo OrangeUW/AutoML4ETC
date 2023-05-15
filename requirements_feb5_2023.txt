@@ -99,3 +99,4 @@ wrapt==1.12.1
 XlsxWriter==3.0.3
 zict==2.1.0
 notebook
+hypernets
