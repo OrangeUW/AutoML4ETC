@@ -79,7 +79,7 @@ plot_model(model)
 ## Default configurations
 
 ```yaml
-searchspace.arch: 'NR'  # this could be 'NR', 'NRNR' or 'NRNRNR', more 'N'ormal cells or 'R'eduction cells is not recommended
+searchspace.arch: 'NRNR'  # this could be 'NR', 'NRNR' or 'NRNRNR', more 'N'ormal cells or 'R'eduction cells is not recommended
 searchspace.init_filters: 64 # number of initial filters to begin process
 searchspace.node_num: 4 # number of nodes per cell
 searchspace.classification_dropout: 0 # final dropout rate before softmax layer
