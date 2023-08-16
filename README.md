@@ -11,13 +11,13 @@ For more info, visit the paper:
 
 https://arxiv.org/abs/2308.02182v1
 
-**Please cite the paper if you use the code or get ideas from it. Thank you!**
+\*\* **Please cite the paper if you use the code or get ideas from it. Thank you!** \*\*
 
 ## About
 AutoML4ETC, a novel tool to automatically design efficient and high-performing neural architectures for encrypted traffic classification. We define a novel, powerful search space tailored specifically for the near real-time classification of encrypted traffic using packet header bytes. We show that with different search strategies over our search space, AutoML4ETC generates neural architectures that outperform the state-of-the-art encrypted traffic classifiers on several datasets, including public benchmark datasets and real-world TLS and QUIC traffic collected from the Orange mobile network. In addition to being more accurate, AutoML4ETC’s architectures are significantly more efficient and lighter in terms of the number of parameters. Finally, we make AutoML4ETC publicly available for future research.
 
 ## System
-The scripts were tested on Ubuntu 20.04 but should be fine on any debian based system.
+The scripts were tested on Ubuntu 20.04 but should be fine on any debian based system. The GPUs tested: NVIDIA A100 and P40
 The python scripts should be platform independent and with little effort the installation scripts can be translated to powershell script or other linux/mac shell environments.
 
 ## Prerequisite
