@@ -7,9 +7,9 @@ Bertrand Mathieu† , Stephanie Moteau† , and Stephane Tuffin†\
 
 <img alt="orange" src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Orange_logo.svg/766px-Orange_logo.svg.png" width="80" /> <img src="https://dataverse.scholarsportal.info/logos/41143/Waterloo.png" width="240" alt="uwaterloo"/>
 
-For more info, visit the paper:
+For more info, visit the paper published at IEEE TNSM journal:
 
-https://arxiv.org/abs/2308.02182v1
+https://ieeexplore.ieee.org/document/10287192
 
 \*\* **Please cite the paper if you use the code or get ideas from it. Thank you!** \*\*
 
